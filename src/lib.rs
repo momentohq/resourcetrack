@@ -3,7 +3,7 @@
 //! # About
 //! A trim, low-dependency tool for counting things. This project does not
 //! use `unsafe` code. It only depends on std.
-//! 
+//!
 //! Safety, clarity, flexibility, and performance are favored in descending order.
 //! Counters are plain structs holding an Arc to an atomic usize. This means there
 //! is a memory cost to the tracking. 0-overhead is not a goal here.
@@ -12,34 +12,34 @@
 //! Resourcetrack supports static categories with your own names:
 //! ```rust
 //! use resourcetrack::new_registry;
-//! 
+//!
 //! #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 //! enum MyCategories {
 //!     Miscellaneous,
 //!     Specific,
 //! }
-//! 
+//!
 //! let registry = new_registry::<MyCategories>();
 //! let specific_category_tracker = registry.category(MyCategories::Specific);
 //! ```
-//! 
+//!
 //! Resourcetrack does not explicitly synchronize categorized resource counters.
 //! ```rust
 //! # use resourcetrack::new_registry;
-//! # 
+//! #
 //! # #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 //! # enum MyCategories {
 //! #     Miscellaneous,
 //! #     Specific,
 //! # }
-//! # 
+//! #
 //! # let registry = new_registry::<MyCategories>();
 //! # let category_tracker = registry.category(MyCategories::Specific);
 //! use resourcetrack::tracked::Count;
-//! 
+//!
 //! let _count_sentinel: Count = category_tracker.track(); // non-blocking, on both track and drop
 //! ```
-//! 
+//!
 //! Counters are a plain struct, and you can compose them onto your expensive business objects for
 //! automatic count management. If you do this, you can consider using lazy_static for this Registry
 //! to wrap up the counts inside of your constructor function. Ideally you'd cascade the lazy_static
@@ -50,17 +50,17 @@
 //!     _phantom_count: resourcetrack::tracked::Count,
 //! }
 //! ```
-//! 
+//!
 //! When you need to get the counts, for logging or metrics or whatever, just read them.
 //! ```rust
 //! # use resourcetrack::new_registry;
-//! # 
+//! #
 //! # #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 //! # enum MyCategories {
 //! #     Miscellaneous,
 //! #     Specific,
 //! # }
-//! # 
+//! #
 //! let registry = new_registry::<MyCategories>();
 //! {
 //!     let _counter_1 = registry.category(MyCategories::Specific).track();
@@ -68,24 +68,24 @@
 //!     let _counter_2 = registry.category(MyCategories::Specific).track();
 //!     assert_eq!(vec![(MyCategories::Specific, 2)], registry.read_counts::<Vec<_>>(), "2 specific instances");
 //! }
-//! 
+//!
 //! assert_eq!(vec![(MyCategories::Specific, 0)], registry.read_counts::<Vec<_>>(), "both dropped");
 //! ```
-//! 
+//!
 //! You can track sized resources, where their size changes. To stay sane, you should probably limit
 //! yourself to either using track() or track_sized() for a given category. You can mix counts and sizes
 //! within a registry though, no problem!
 //! Complete example:
 //! ```rust
 //! use resourcetrack::tracked;
-//! 
+//!
 //! // Set up your statically knowable categories
 //! #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 //! enum MyCategories {
 //!     ResourceCount,
 //!     ResourceWeight,
 //! }
-//! 
+//!
 //! // Here is an example of a tracked business object
 //! struct TrackedVector {
 //!     internal: Vec<String>,
@@ -97,19 +97,19 @@
 //!         self.weight.add(next.len());
 //!     }
 //! }
-//! 
+//!
 //! // Static setup - this should be in some shared lazy static scope.
 //! let registry = resourcetrack::new_registry::<MyCategories>();
 //! let resource_counts = registry.category(MyCategories::ResourceCount);
 //! let resource_weights = registry.category(MyCategories::ResourceWeight);
-//! 
+//!
 //! let mut v = TrackedVector { // This should be wrapped into TrackedVector::new() in your application
 //!     internal: Default::default(),
 //!     _count_sentinel: resource_counts.track(),
 //!     weight: resource_weights.track_size(0),
 //! };
 //! v.push("hello".to_string());
-//! 
+//!
 //! let mut counts = registry.read_counts::<Vec<_>>();
 //! counts.sort();
 //! assert_eq!(
@@ -121,15 +121,25 @@
 //! )
 //! ```
 
-use std::{sync::{atomic::AtomicUsize, Arc, Mutex}, collections::HashMap, borrow::Borrow, fmt::Debug};
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    fmt::Debug,
+    sync::{atomic::AtomicUsize, Arc, Mutex},
+};
 
 pub struct Registry<Id> {
     categories: Mutex<HashMap<Id, Category>>,
 }
 
-impl<Id> Debug for Registry<Id> where Id: Debug {
+impl<Id> Debug for Registry<Id>
+where
+    Id: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Registry").field("categories", &self.categories).finish()
+        f.debug_struct("Registry")
+            .field("categories", &self.categories)
+            .finish()
     }
 }
 
@@ -139,23 +149,38 @@ impl<Id> Debug for Registry<Id> where Id: Debug {
 ///
 /// If you need to track dynamic ids, consider using Arc<String> or something like that
 /// so that Clone is not too costly.
-pub fn new_registry<Id>() -> Registry<Id> where Id: Debug + Eq + std::hash::Hash + Clone {
-    Registry { categories: Default::default() }
+pub fn new_registry<Id>() -> Registry<Id>
+where
+    Id: Debug + Eq + std::hash::Hash + Clone,
+{
+    Registry {
+        categories: Default::default(),
+    }
 }
 
-impl<Id> Registry<Id> where Id: Debug + Eq + std::hash::Hash + Clone {
+impl<Id> Registry<Id>
+where
+    Id: Debug + Eq + std::hash::Hash + Clone,
+{
     /// You should cache the tracker. Getting a reference requires a mutex interaction.
     /// It's fine to do it occasionally, or in non-latency-sensitive paths, but this is
     /// not an optimized path. Tracker and Count are quick.
-    pub fn category<Name>(&self, name: Name) -> Tracker where Name: Into<Id> + std::hash::Hash + std::cmp::Eq, Id: Borrow<Name> {
+    pub fn category<Name>(&self, name: Name) -> Tracker
+    where
+        Name: Into<Id> + std::hash::Hash + std::cmp::Eq,
+        Id: Borrow<Name>,
+    {
         let mut categories = self.categories.lock().expect("local mutex");
         let count = match categories.get(&name) {
-            Some(existing) => {
-                existing.count.clone()
-            }
+            Some(existing) => existing.count.clone(),
             None => {
                 let count = Arc::new(AtomicUsize::new(0));
-                categories.insert(name.into(), Category { count: count.clone() });
+                categories.insert(
+                    name.into(),
+                    Category {
+                        count: count.clone(),
+                    },
+                );
                 count
             }
         };
@@ -167,9 +192,15 @@ impl<Id> Registry<Id> where Id: Debug + Eq + std::hash::Hash + Clone {
     ///
     /// This function contends with category(). Try to get your category trackers up front and use
     /// this only in a background job.
-    pub fn read_counts<AsCollection>(&self) -> AsCollection where AsCollection: FromIterator<(Id, usize)> {
+    pub fn read_counts<AsCollection>(&self) -> AsCollection
+    where
+        AsCollection: FromIterator<(Id, usize)>,
+    {
         let categories = self.categories.lock().expect("local mutex");
-        categories.iter().map(|(id, category)| (id.clone(), category.count())).collect()
+        categories
+            .iter()
+            .map(|(id, category)| (id.clone(), category.count()))
+            .collect()
     }
 }
 
@@ -179,7 +210,9 @@ struct Category {
 
 impl Debug for Category {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Category").field("count", &self.count()).finish()
+        f.debug_struct("Category")
+            .field("count", &self.count())
+            .finish()
     }
 }
 
@@ -196,7 +229,8 @@ pub struct Tracker {
 impl Tracker {
     /// Hold 1 count against the category until the returned tracked::Count guard is dropped.
     pub fn track(&self) -> tracked::Count {
-        self.count.fetch_add(1, std::sync::atomic::Ordering::Release);
+        self.count
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
         tracked::Count {
             count: self.count.clone(),
         }
@@ -207,7 +241,8 @@ impl Tracker {
     /// resource category: When you change the buffer size you can also update the tracked::Size
     /// for better visibility into where your memory is spent.
     pub fn track_size(&self, initial: usize) -> tracked::Size {
-        self.count.fetch_add(initial, std::sync::atomic::Ordering::Release);
+        self.count
+            .fetch_add(initial, std::sync::atomic::Ordering::Release);
         tracked::Size {
             count: self.count.clone(),
             size: initial,
@@ -222,10 +257,11 @@ pub mod tracked {
     pub struct Count {
         pub(crate) count: Arc<AtomicUsize>,
     }
-    
+
     impl Drop for Count {
         fn drop(&mut self) {
-            self.count.fetch_sub(1, std::sync::atomic::Ordering::Release);
+            self.count
+                .fetch_sub(1, std::sync::atomic::Ordering::Release);
         }
     }
 
@@ -240,29 +276,36 @@ pub mod tracked {
         pub fn set(&mut self, new_size: usize) {
             let difference = new_size.abs_diff(self.size);
             if new_size < self.size {
-                self.count.fetch_sub(difference, std::sync::atomic::Ordering::Release);
+                self.count
+                    .fetch_sub(difference, std::sync::atomic::Ordering::Release);
             } else {
-                self.count.fetch_add(difference, std::sync::atomic::Ordering::Release);
+                self.count
+                    .fetch_add(difference, std::sync::atomic::Ordering::Release);
             }
             self.size = new_size;
         }
 
         /// change the tracked count for this resource
         pub fn add(&mut self, amount: usize) {
-            self.count.fetch_add(amount, std::sync::atomic::Ordering::Release);
+            self.count
+                .fetch_add(amount, std::sync::atomic::Ordering::Release);
             self.size += amount;
         }
 
         /// change the tracked count for this resource
         pub fn subtract(&mut self, amount: usize) {
-            self.count.fetch_sub(std::cmp::min(amount, self.size), std::sync::atomic::Ordering::Release);
+            self.count.fetch_sub(
+                std::cmp::min(amount, self.size),
+                std::sync::atomic::Ordering::Release,
+            );
             self.size = self.size.saturating_sub(amount);
         }
     }
-    
+
     impl Drop for Size {
         fn drop(&mut self) {
-            self.count.fetch_sub(self.size, std::sync::atomic::Ordering::Release);
+            self.count
+                .fetch_sub(self.size, std::sync::atomic::Ordering::Release);
         }
     }
 }
@@ -279,7 +322,7 @@ mod test {
         SpecificOne,
     }
 
-    type CountsVec = Vec::<(Categories, usize)>;
+    type CountsVec = Vec<(Categories, usize)>;
 
     #[test]
     fn count_follows_counters() {
@@ -288,13 +331,22 @@ mod test {
         assert_eq!(CountsVec::new(), registry.read_counts::<Vec<_>>());
 
         let miscellaneous_tracker = registry.category(Categories::Miscellaneous);
-        assert_eq!(vec![(Categories::Miscellaneous, 0)], registry.read_counts::<Vec<_>>());
+        assert_eq!(
+            vec![(Categories::Miscellaneous, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
 
         {
             let _counter = miscellaneous_tracker.track();
-            assert_eq!(vec![(Categories::Miscellaneous, 1)], registry.read_counts::<Vec<_>>());
+            assert_eq!(
+                vec![(Categories::Miscellaneous, 1)],
+                registry.read_counts::<Vec<_>>()
+            );
         }
-        assert_eq!(vec![(Categories::Miscellaneous, 0)], registry.read_counts::<Vec<_>>());
+        assert_eq!(
+            vec![(Categories::Miscellaneous, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -303,8 +355,14 @@ mod test {
         let category_tracker = registry.category(Categories::SpecificOne);
 
         let _counter = category_tracker.track();
-        assert_eq!(vec![(Categories::SpecificOne, 1)], registry.read_counts::<Vec<_>>());
-        assert_eq!(vec![(Categories::SpecificOne, 1)], registry.read_counts::<Vec<_>>());
+        assert_eq!(
+            vec![(Categories::SpecificOne, 1)],
+            registry.read_counts::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![(Categories::SpecificOne, 1)],
+            registry.read_counts::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -313,7 +371,10 @@ mod test {
         let category_tracker = registry.category("plain string category");
 
         let _counter = category_tracker.track();
-        assert_eq!(vec![("plain string category", 1)], registry.read_counts::<Vec<_>>());
+        assert_eq!(
+            vec![("plain string category", 1)],
+            registry.read_counts::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -330,6 +391,9 @@ mod test {
         let category_tracker = registry.category(Arc::new("dynamic".into()));
 
         let _counter = category_tracker.track();
-        assert_eq!(vec![(Arc::new("dynamic".into()), 1)], registry.read_counts::<Vec<_>>());
+        assert_eq!(
+            vec![(Arc::new("dynamic".into()), 1)],
+            registry.read_counts::<Vec<_>>()
+        );
     }
 }
