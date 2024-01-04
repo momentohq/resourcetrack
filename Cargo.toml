@@ -1,0 +1,23 @@
+[package]
+name = "resourcetrack"
+version = "0.1.0"
+edition = "2021"
+authors = ["momento", "kvcache"]
+description = "Basic tools for counting objects"
+readme = "README.md"
+license = "Apache-2.0"
+repository = "https://github.com/momentohq/resourcetrack"
+homepage = "https://gomomento.com/"
+
+
+[lib]
+bench = false
+
+[[bench]]
+name = "bench_main"
+harness = false
+
+[dependencies]
+
+[dev-dependencies]
+criterion = { version = "0.5" }
