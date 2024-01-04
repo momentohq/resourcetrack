@@ -396,4 +396,97 @@ mod test {
             registry.read_counts::<Vec<_>>()
         );
     }
+
+    #[test]
+    fn add() {
+        let registry = new_registry::<Categories>();
+        let category_tracker = registry.category(Categories::SpecificOne);
+
+        {
+            let mut size = category_tracker.track_size(4);
+            assert_eq!(
+                vec![(Categories::SpecificOne, 4)],
+                registry.read_counts::<Vec<_>>()
+            );
+
+            size.add(3);
+
+            assert_eq!(
+                vec![(Categories::SpecificOne, 7)],
+                registry.read_counts::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            vec![(Categories::SpecificOne, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subtract() {
+        let registry = new_registry::<Categories>();
+        let category_tracker = registry.category(Categories::SpecificOne);
+
+        {
+            let mut size = category_tracker.track_size(4);
+
+            size.subtract(2);
+
+            assert_eq!(
+                vec![(Categories::SpecificOne, 2)],
+                registry.read_counts::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            vec![(Categories::SpecificOne, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subtract_does_not_wrap() {
+        let registry = new_registry::<Categories>();
+        let category_tracker = registry.category(Categories::SpecificOne);
+
+        {
+            let mut size = category_tracker.track_size(4);
+
+            size.subtract(5); // probably a bug in your code - let's not make it worse.
+
+            assert_eq!(
+                vec![(Categories::SpecificOne, 0)],
+                registry.read_counts::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            vec![(Categories::SpecificOne, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn size_set() {
+        let registry = new_registry::<Categories>();
+        let category_tracker = registry.category(Categories::SpecificOne);
+
+        {
+            let mut size = category_tracker.track_size(4);
+
+            size.set(5);
+            assert_eq!(
+                vec![(Categories::SpecificOne, 5)],
+                registry.read_counts::<Vec<_>>()
+            );
+
+            size.set(1);
+            assert_eq!(
+                vec![(Categories::SpecificOne, 1)],
+                registry.read_counts::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            vec![(Categories::SpecificOne, 0)],
+            registry.read_counts::<Vec<_>>()
+        );
+    }
 }
