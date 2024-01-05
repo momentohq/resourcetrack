@@ -138,7 +138,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Registry")
-            .field("categories", &self.categories)
+            .field("categories", &self.categories.lock().expect("local mutex"))
             .finish()
     }
 }
@@ -172,13 +172,13 @@ where
     {
         let mut categories = self.categories.lock().expect("local mutex");
         let count = match categories.get(&name) {
-            Some(existing) => existing.count.clone(),
+            Some(existing) => existing.total.clone(),
             None => {
                 let count = Arc::new(AtomicUsize::new(0));
                 categories.insert(
                     name.into(),
                     Category {
-                        count: count.clone(),
+                        total: count.clone(),
                     },
                 );
                 count
@@ -199,31 +199,41 @@ where
         let categories = self.categories.lock().expect("local mutex");
         categories
             .iter()
-            .map(|(id, category)| (id.clone(), category.count()))
+            .map(|(id, category)| (id.clone(), category.total()))
             .collect()
     }
 }
 
 struct Category {
-    count: Arc<AtomicUsize>,
+    total: Arc<AtomicUsize>,
 }
 
 impl Debug for Category {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Category")
-            .field("count", &self.count())
+            .field("total", &self.total())
             .finish()
     }
 }
 
 impl Category {
-    pub fn count(&self) -> usize {
-        self.count.load(std::sync::atomic::Ordering::Relaxed)
+    pub fn total(&self) -> usize {
+        self.total.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
 pub struct Tracker {
     count: Arc<AtomicUsize>,
+}
+
+impl Debug for Tracker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.count.load(std::sync::atomic::Ordering::Relaxed)
+        )
+    }
 }
 
 impl Tracker {
