@@ -232,7 +232,7 @@ impl Tracker {
         self.count
             .fetch_add(1, std::sync::atomic::Ordering::Release);
         tracked::Count {
-            count: self.count.clone(),
+            total: self.count.clone(),
         }
     }
 
@@ -244,68 +244,93 @@ impl Tracker {
         self.count
             .fetch_add(initial, std::sync::atomic::Ordering::Release);
         tracked::Size {
-            count: self.count.clone(),
-            size: initial,
+            total: self.count.clone(),
+            local: initial,
         }
     }
 }
 
 pub mod tracked {
-    use std::sync::{atomic::AtomicUsize, Arc};
+    use std::{
+        fmt::Debug,
+        sync::{atomic::AtomicUsize, Arc},
+    };
 
     /// Fixed handle for a resource that is only counted by its existence.
     pub struct Count {
-        pub(crate) count: Arc<AtomicUsize>,
+        pub(crate) total: Arc<AtomicUsize>,
+    }
+
+    impl Debug for Count {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "Count: {}",
+                self.total.load(std::sync::atomic::Ordering::Relaxed)
+            )
+        }
     }
 
     impl Drop for Count {
         fn drop(&mut self) {
-            self.count
+            self.total
                 .fetch_sub(1, std::sync::atomic::Ordering::Release);
         }
     }
 
     /// Mutable handle for a resource of changing size.
     pub struct Size {
-        pub(crate) count: Arc<AtomicUsize>,
-        pub(crate) size: usize,
+        pub(crate) total: Arc<AtomicUsize>,
+        pub(crate) local: usize,
+    }
+
+    impl Debug for Size {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Size")
+                .field(
+                    "total",
+                    &self.total.load(std::sync::atomic::Ordering::Relaxed),
+                )
+                .field("local", &self.local)
+                .finish()
+        }
     }
 
     impl Size {
         /// change the tracked count for this resource
         pub fn set(&mut self, new_size: usize) {
-            let difference = new_size.abs_diff(self.size);
-            if new_size < self.size {
-                self.count
+            let difference = new_size.abs_diff(self.local);
+            if new_size < self.local {
+                self.total
                     .fetch_sub(difference, std::sync::atomic::Ordering::Release);
             } else {
-                self.count
+                self.total
                     .fetch_add(difference, std::sync::atomic::Ordering::Release);
             }
-            self.size = new_size;
+            self.local = new_size;
         }
 
         /// change the tracked count for this resource
         pub fn add(&mut self, amount: usize) {
-            self.count
+            self.total
                 .fetch_add(amount, std::sync::atomic::Ordering::Release);
-            self.size += amount;
+            self.local += amount;
         }
 
         /// change the tracked count for this resource
         pub fn subtract(&mut self, amount: usize) {
-            self.count.fetch_sub(
-                std::cmp::min(amount, self.size),
+            self.total.fetch_sub(
+                std::cmp::min(amount, self.local),
                 std::sync::atomic::Ordering::Release,
             );
-            self.size = self.size.saturating_sub(amount);
+            self.local = self.local.saturating_sub(amount);
         }
     }
 
     impl Drop for Size {
         fn drop(&mut self) {
-            self.count
-                .fetch_sub(self.size, std::sync::atomic::Ordering::Release);
+            self.total
+                .fetch_sub(self.local, std::sync::atomic::Ordering::Release);
         }
     }
 }
