@@ -2,10 +2,6 @@
 
 Yet-another resource tracking tool.
 
-Compared to the more general purpose and excellent `tokio::sync::broadcast`,
-Splaycast is more application-specific and more amenable to huge numbers of
-subscribers.
-
 # About
 A trim, low-dependency tool for counting things. This project does not
 use `unsafe` code. It only depends on std.
