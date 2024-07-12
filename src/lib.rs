@@ -204,6 +204,7 @@ where
     }
 }
 
+#[derive(Clone)]
 struct Category {
     total: Arc<AtomicUsize>,
 }
@@ -222,6 +223,7 @@ impl Category {
     }
 }
 
+#[derive(Clone)]
 pub struct Tracker {
     count: Arc<AtomicUsize>,
 }
